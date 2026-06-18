@@ -772,7 +772,7 @@ public class ExecuteServlet extends HttpServlet {
 
                             if ("uninstallcomplete".equals(targetStatus)) {
                                 sql = "UPDATE IM_RMW.IM_HOME_SERVICE SET FINISH_STATUS = 15 " +
-                                        "WHERE FINISH_STATUS = 14 AND STATEFLAG = 0 AND FLOW_ID IN (" + placeholders + ")";
+                                        "WHERE STATEFLAG = 0 AND FLOW_ID IN (" + placeholders + ")";
                             } else {
                                 sql = "UPDATE IM_RMW.IM_HOME_SERVICE SET FINISH_STATUS = ? " +
                                         "WHERE FINISH_STATUS = ? AND STATEFLAG = 0 AND FLOW_ID IN (" + placeholders + ")";
