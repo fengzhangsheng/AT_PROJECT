@@ -2,6 +2,8 @@ package com.example;
 
 import java.io.OutputStream;
 import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -67,7 +69,8 @@ public class SQLToExcel {
             throw new IllegalArgumentException("Invalid export_type");
         }
 
-        // 4. 显式加载驱动并手动管理连接（按你的要求）
+        // 4. 显式加载驱动并手动管理连接
+        log("exportSdmFastExcel", "导出类型=" + exportType + ", IDs数量=" + ids.length);
         Connection con = null;
         Statement stmt = null;
         ResultSet rs = null;
@@ -79,11 +82,13 @@ public class SQLToExcel {
 
             // 获取连接
             con = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+            log("exportSdmFastExcel", "连接数据库: " + JDBC_URL + " (" + USERNAME + ")");
 
             // 创建语句
             stmt = con.createStatement();
 
             // 执行查询
+            logSql("exportSdmFastExcel", sql, "");
             rs = stmt.executeQuery(sql);
 
             // 创建 Excel
@@ -109,10 +114,13 @@ public class SQLToExcel {
 
             // 写入输出流
             workbook.write(out);
+            log("exportSdmFastExcel", "✅ Excel生成成功, 行数=" + (rowNum - 1));
 
         } catch (ClassNotFoundException e) {
+            log("exportSdmFastExcel", "❌ 驱动加载失败: " + e.getMessage());
             throw new RuntimeException("GaussDB JDBC Driver not found", e);
         } catch (SQLException e) {
+            log("exportSdmFastExcel", "❌ 数据库错误: " + e.getMessage());
             throw new RuntimeException("Database error", e);
         } finally {
             // 手动关闭资源（逆序关闭）
@@ -128,6 +136,23 @@ public class SQLToExcel {
             if (con != null) {
                 try { con.close(); } catch (SQLException ignored) {}
             }
+        }
+    }
+
+    // ==================== 日志辅助方法 ====================
+
+    private static String now() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private static void log(String method, String message) {
+        System.out.println("[" + now() + "] [SQLToExcel." + method + "] " + message);
+    }
+
+    private static void logSql(String method, String sql, String params) {
+        System.out.println("[" + now() + "] [SQLToExcel." + method + "] 📝 执行SQL: " + sql);
+        if (params != null && !params.isEmpty()) {
+            System.out.println("[" + now() + "] [SQLToExcel." + method + "]    参数: " + params);
         }
     }
 }

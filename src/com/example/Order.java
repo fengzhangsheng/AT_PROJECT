@@ -11,6 +11,8 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.logging.Level;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 
 import lombok.Builder;
@@ -61,30 +63,34 @@ public class Order {
             return;
         }
         flowId = flowId.trim();
+        log("updateAM", "开始处理, flowId=" + flowId);
         logger.info("Executing updateIM for flow_id: " + flowId);
 
         final String sql = "SELECT a.order_id AS flowid FROM am_ces.t_am_sub_flow_info a WHERE a.id = ?";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, flowId);
+            logSql("updateAM", sql, "id=" + flowId);
             logger.info("Executing SQL: " + sql + " with parameter: " + flowId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    String orderFlowId = rs.getString("flowid"); // 映射的 flowid
+                    String orderFlowId = rs.getString("flowid");
                     String requestBody = "ids=" + orderFlowId;
 
+                    log("updateAM", "调用API: http://10.199.167.160:15203/am/plugins/activeFlow/cmdinstance/redoBatch.ilf, requestBody=" + requestBody);
                     logger.info("About to POST, requestBody=" + requestBody);
 
-                    // 调用外部 API
                     String response = HttpsUtils.post(
                             "http://10.199.167.160:15203/am/plugins/activeFlow/cmdinstance/redoBatch.ilf",
                             requestBody,
-                            sessionToken  // 使用类的静态 sessionToken
+                            sessionToken
                     );
 
+                    log("updateAM", "API响应: " + response);
                     logger.info("API response: " + response);
                 } else {
+                    log("updateAM", "⚠️ 未找到数据, flowId=" + flowId);
                     logger.warn("No data found for flowId: " + flowId);
                 }
             }
@@ -107,6 +113,7 @@ public class Order {
             return;
         }
         flowId = flowId.trim();
+        log("updateIM", "开始处理, flowId=" + flowId);
         logger.info("Executing updateIM for flow_id: {}", flowId);
 
         // 2. 定义 SQL 查询（获取最新一条任务数据）
@@ -122,35 +129,35 @@ public class Order {
                         ") WHERE rownum <= 1";
 
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            // 3. 设置参数并执行查询
             ps.setString(1, flowId);
+            logSql("updateIM", sql, "flowId=" + flowId);
             logger.info("Executing SQL: {} with parameter: {}", sql, flowId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    // 4. 提取数据库字段
                     String activityId  = rs.getString("activityId");
                     String flow_id     = rs.getString("flow_id");
                     String operateType = rs.getString("operate_type");
                     String serviceId   = rs.getString("serviceId");
 
-                    // 5. 构造请求体
                     String requestBody = "activityId=" + activityId +
                             "&flow_id=" + flow_id +
                             "&operate_type=" + operateType +
                             "&serviceId=" + serviceId;
 
+                    log("updateIM", "调用API: http://10.199.167.141:15202/imService/plugins/family/taskinfo/submit.ilf, requestBody=" + requestBody);
                     logger.info("About to POST to API, requestBody={}", requestBody);
 
-                    // 6. 调用外部接口
                     String response = HttpsUtils.post(
                             "http://10.199.167.141:15202/imService/plugins/family/taskinfo/submit.ilf",
                             requestBody,
                             sessionToken
                     );
 
+                    log("updateIM", "API响应: " + response);
                     logger.info("API response: {}", response);
                 } else {
+                    log("updateIM", "⚠️ 未找到数据, flowId=" + flowId);
                     logger.warn("No data found for flowId: {}", flowId);
                 }
             }
@@ -170,13 +177,16 @@ public class Order {
                         "WHERE t.flow_id = ? " +
                         "  AND execute_cmd LIKE '%' || ? || '%'";
 
+        log("updatesn", "开始处理, flowId=" + flowId + ", oldVal=" + oldVal + ", newVal=" + newVal);
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, oldVal);     // REPLACE 中的旧值
-            ps.setString(2, newVal);     // REPLACE 中的新值
-            ps.setString(3, flowId);     // 条件：flow_id
-            ps.setString(4, oldVal);     // 条件：LIKE 匹配旧值
+            ps.setString(1, oldVal);
+            ps.setString(2, newVal);
+            ps.setString(3, flowId);
+            ps.setString(4, oldVal);
 
+            logSql("updatesn", sql, "oldVal=" + oldVal + ", newVal=" + newVal + ", flowId=" + flowId);
             int rows = ps.executeUpdate();
+            log("updatesn", "✅ 更新结果: " + rows + " 行");
             logger.info("Replaced '{}' with '{}' in {} row(s) for flow_id={}", oldVal, newVal, rows, flowId);
 
         } catch (SQLException e) {
@@ -193,6 +203,7 @@ public class Order {
             return;
         }
         flowId = flowId.trim();
+        log("finishamorder", "开始处理, flowId=" + flowId);
         logger.info("Executing finishamorder for flow_id: {}", flowId);
 
         // 2. 定义三条 SQL 更新语句（使用 ? 参数化）
@@ -244,7 +255,10 @@ public class Order {
     private static int executeUpdate(String sql, String flowId) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, flowId);
-            return ps.executeUpdate();
+            logSql("finishamorder", sql, "flowId=" + flowId);
+            int rows = ps.executeUpdate();
+            log("finishamorder", "影响行数: " + rows);
+            return rows;
         }
     }
     /**
@@ -256,6 +270,7 @@ public class Order {
             return;
         }
         flowId = flowId.trim();
+        log("skipwfm", "开始处理, flowId=" + flowId);
         logger.info("Executing updateIM for flow_id: {}", flowId);
 
         // Step 1: 查询匹配的 flow_id 列表
@@ -266,21 +281,23 @@ public class Order {
         try (PreparedStatement ps = connection.prepareStatement(query)) {
             ps.setString(1, flowId);
             ps.setString(2, flowId);
+            logSql("skipwfm", query, "flowId=" + flowId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String fid = rs.getString("flow_id");
-                    System.out.println("CRM: " + rs.getString("crm_no") + " | FlowID: " + fid);
+                    log("skipwfm", "查询到: CRM=" + rs.getString("crm_no") + ", FlowID=" + fid);
                     flowIds.add(fid);
                 }
             }
         } catch (SQLException e) {
-            System.err.println("Database query failed: " + e.getMessage());
+            log("skipwfm", "❌ 数据库查询失败: " + e.getMessage());
+            logger.error("Database query failed", e);
             return;
         }
 
         if (flowIds.isEmpty()) {
-            System.out.println("No flowid found for: " + flowId);
+            log("skipwfm", "⚠️ 未找到 flowId: " + flowId);
             return;
         }
 
@@ -293,24 +310,28 @@ public class Order {
         updateSql.append(")");
 
         int updateCount = 0;
-        try (PreparedStatement ps = connection.prepareStatement(updateSql.toString())) {
+        String updateSqlStr = updateSql.toString();
+        try (PreparedStatement ps = connection.prepareStatement(updateSqlStr)) {
             for (int i = 0; i < flowIds.size(); i++) {
                 ps.setString(i + 1, flowIds.get(i));
             }
+            logSql("skipwfm", updateSqlStr, "flowIds=" + flowIds);
             updateCount = ps.executeUpdate();
+            log("skipwfm", "批量更新结果: " + updateCount + " 行 (期望 " + flowIds.size() + ")");
         } catch (SQLException e) {
-            System.err.println("Order update failed: " + e.getMessage());
+            log("skipwfm", "❌ 批量更新失败: " + e.getMessage());
+            logger.error("Order update failed", e);
             return;
         }
 
         if (updateCount != flowIds.size()) {
-            System.out.println("Update count mismatch: expected=" + flowIds.size() + ", actual=" + updateCount);
+            log("skipwfm", "⚠️ 更新数量不匹配: expected=" + flowIds.size() + ", actual=" + updateCount);
             return;
         }
 
-        System.out.println("Orders set to abnormal");
+        log("skipwfm", "订单已标记为异常状态");
 
-        // Step 3: 遍历每个 flowId，查询任务信息并调用 API（带异常处理）
+        // Step 3: 遍历每个 flowId，查询任务信息并调用 API
         String selectQuery = "SELECT a.FLOW_ID AS flowId, t.ID AS workitemid, " +
                 "a.proc_ins_id AS processinstid, a.FLOW_MODEL AS processId, " +
                 "t.act_def_unique_id AS activityDefId, t.act_def_id AS activityId, " +
@@ -327,16 +348,14 @@ public class Order {
                         String activityId = rs.getString("activityId");
                         if (activityId == null) continue;
 
-                        // 检查是否是 WFM 节点
                         if (!(activityId.contains("CoWork") ||
                                 activityId.contains("FieldWork") ||
                                 activityId.contains("COWork") ||
                                 activityId.contains("Acti"))) {
-                            System.out.println("Order not in WFM or AM: " + activityId);
+                            log("skipwfm", "订单不在 WFM/AM 节点: " + activityId);
                             continue;
                         }
 
-                        // 构建请求参数
                         String params = "flowId=" + rs.getString("flowId") +
                                 "&workitemid=" + rs.getString("workitemid") +
                                 "&processinstid=" + rs.getString("processinstid") +
@@ -346,38 +365,36 @@ public class Order {
                                 "&orderstate=" + rs.getString("orderstate") +
                                 "&comment=jar";
 
-                        // 调用外部 API（带异常捕获）
                         try {
+                            log("skipwfm", "调用API: http://10.199.167.160:15201/om/service/om/wotask/goToNext.ilf, flowId=" + fid);
                             String response = HttpsUtils.post(
                                     "http://10.199.167.160:15201/om/service/om/wotask/goToNext.ilf",
                                     params, sessionToken
                             );
 
-                            // 检查响应是否为空或错误
                             if (response == null || response.trim().isEmpty()) {
-                                System.err.println("API returned empty response for flowId: " + fid);
+                                log("skipwfm", "⚠️ API 返回空响应, flowId=" + fid);
                             } else {
-                                System.out.println("API Response [flowId=" + fid + "]: " + response);
+                                log("skipwfm", "API响应 [flowId=" + fid + "]: " + response);
                             }
 
                         } catch (Exception httpEx) {
-                            // 🔥 捕获所有网络/HTTP/超时异常
-                            System.err.println("Failed to call API for flowId=" + fid +
-                                    ", URL: http://10.199.167.160:15201/om/service/om/wotask/goToNext.ilf");
-                            System.err.println("Error: " + httpEx.getClass().getSimpleName() + ": " + httpEx.getMessage());
-                            // 继续处理下一个 flowId，不中断整体流程
+                            log("skipwfm", "❌ API调用失败, flowId=" + fid + ": " + httpEx.getClass().getSimpleName() + " - " + httpEx.getMessage());
+                            logger.error("Failed to call API for flowId=" + fid, httpEx);
                             continue;
                         }
                     }
                 } catch (SQLException e) {
-                    System.err.println("Failed to query task info for flowId=" + fid + ": " + e.getMessage());
-                    // 继续处理下一个 flowId
+                    log("skipwfm", "❌ 查询任务信息失败, flowId=" + fid + ": " + e.getMessage());
+                    logger.error("Failed to query task info for flowId=" + fid, e);
                     continue;
                 }
             }
         } catch (SQLException e) {
-            System.err.println("Prepare statement failed for task query: " + e.getMessage());
+            log("skipwfm", "❌ 准备查询语句失败: " + e.getMessage());
+            logger.error("Prepare statement failed for task query", e);
         }
+        log("skipwfm", "✅ 处理完成");
     }
 
     public static void updateAMSN(String flowId, String operation, String worksheetAction) {
@@ -518,11 +535,14 @@ public class Order {
         }
     }
     public static void markamorderAsAbnormal(String flowId) throws SQLException {
+        log("markamorderAsAbnormal", "开始处理, flowId=" + flowId);
         String sql = "UPDATE om.T_BPM_FORM_INFO p SET p.TASK_STATUS =3 WHERE p.FLOW_ID = ?";
 
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, flowId);
+            logSql("markamorderAsAbnormal", sql, "flowId=" + flowId);
             int rows = stmt.executeUpdate();
+            log("markamorderAsAbnormal", "更新结果: " + rows + " 行");
             if (rows == 0) {
                 throw new SQLException("No order found with flow_id: " + flowId);
             }
@@ -539,6 +559,7 @@ public class Order {
         String query = "SELECT flow_id, crm_no FROM T_BPM_FORM_INFO WHERE flow_id = ? ";
         try (PreparedStatement ps = connection.prepareStatement(query)) {
             ps.setString(1, flowId);
+            logSql("MSV", query, "flowId=" + flowId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     logger.info("Found: crm_no={}, flow_id={}", rs.getString("crm_no"), rs.getString("flow_id"));
@@ -573,7 +594,9 @@ public class Order {
 
         String updateSql = "UPDATE T_BPM_FORM_INFO SET task_status = '3' WHERE flow_id IN (" + inClause + ")";
         try (Statement stmt = connection.createStatement()) {
+            logSql("executeUpdateAndSend", updateSql, "flowIds=" + flowIds);
             int rows = stmt.executeUpdate(updateSql);
+            log("executeUpdateAndSend", "批量更新: " + rows + " 行 (期望 " + flowIds.size() + ")");
             logger.info("Updated {} rows to task_status=3", rows);
 
             if (rows == flowIds.size()) {
@@ -589,23 +612,28 @@ public class Order {
 
     // ==================== 调用外部接口 ====================
     public static void closeWFMComplaintOrder(Connection con, String flowId) throws SQLException {
+        log("closeWFMComplaintOrder", "开始处理, flowId=" + flowId);
         // Step 1: 更新主表状态
         String sql1 = "UPDATE ALGERIA_WFM.t_wfm_complaint " +
                 "SET PRO_NEXT_ACT_NAME = 'Close', PRO_CUR_ACT_NAME = 'SDM Approval', endtime = SYSDATE " +
                 "WHERE GAIATTCODE = ?";
         try (PreparedStatement ps1 = con.prepareStatement(sql1)) {
             ps1.setString(1, flowId);
-            ps1.executeUpdate();
+            logSql("closeWFMComplaintOrder", sql1, "GAIATTCODE=" + flowId);
+            int r1 = ps1.executeUpdate();
+            log("closeWFMComplaintOrder", "Step1-更新主表: " + r1 + " 行");
         }
 
-        // Step 2: 插入活动记录（仅当该 flow_id 存在时才插入）
+        // Step 2: 插入活动记录
         String sql2 = "INSERT INTO ALGERIA_WFM.T_WFM_COMPLAINT_ACTIVITY (" +
                 "ID, PRIMARY_KEY, TICKET_STEP, PRO_NEXT_ACT_NAME, PROCESSDEFNAME, HANDLE_TIME) " +
                 "SELECT SYS_GUID(), ID, 'Close', 'Close', 'Complaint', SYSDATE " +
                 "FROM ALGERIA_WFM.t_wfm_complaint WHERE GAIATTCODE = ?";
         try (PreparedStatement ps2 = con.prepareStatement(sql2)) {
             ps2.setString(1, flowId);
-            ps2.executeUpdate();
+            logSql("closeWFMComplaintOrder", sql2, "GAIATTCODE=" + flowId);
+            int r2 = ps2.executeUpdate();
+            log("closeWFMComplaintOrder", "Step2-插入活动记录: " + r2 + " 行");
         }
 
         // Step 3: 删除待办任务
@@ -613,7 +641,9 @@ public class Order {
                 "WHERE WODATAID IN (SELECT ID FROM ALGERIA_WFM.t_wfm_complaint WHERE GAIATTCODE = ?)";
         try (PreparedStatement ps3 = con.prepareStatement(sql3)) {
             ps3.setString(1, flowId);
-            ps3.executeUpdate();
+            logSql("closeWFMComplaintOrder", sql3, "GAIATTCODE=" + flowId);
+            int r3 = ps3.executeUpdate();
+            log("closeWFMComplaintOrder", "Step3-删除待办任务: " + r3 + " 行");
         }
 
         // Step 4: 删除 WF_ASSIGNMENT
@@ -624,7 +654,9 @@ public class Order {
                 ")";
         try (PreparedStatement ps4 = con.prepareStatement(sql4)) {
             ps4.setString(1, flowId);
-            ps4.executeUpdate();
+            logSql("closeWFMComplaintOrder", sql4, "GAIATTCODE=" + flowId);
+            int r4 = ps4.executeUpdate();
+            log("closeWFMComplaintOrder", "Step4-删除WF_ASSIGNMENT: " + r4 + " 行");
         }
 
         // Step 5: 删除 WF_ACTIVITY
@@ -635,8 +667,11 @@ public class Order {
                 ")";
         try (PreparedStatement ps5 = con.prepareStatement(sql5)) {
             ps5.setString(1, flowId);
-            ps5.executeUpdate();
+            logSql("closeWFMComplaintOrder", sql5, "GAIATTCODE=" + flowId);
+            int r5 = ps5.executeUpdate();
+            log("closeWFMComplaintOrder", "Step5-删除WF_ACTIVITY: " + r5 + " 行");
         }
+        log("closeWFMComplaintOrder", "✅ 处理完成");
     }
 
     /**
@@ -660,7 +695,7 @@ public class Order {
                     "WHERE a.flow_id = ?";
 
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
-                ps.setString(1, flowId);  // 安全地设置参数
+                ps.setString(1, flowId);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         processInstId = rs.getString("processinstid");
@@ -703,8 +738,9 @@ public class Order {
             // 发送请求
             String url = "http://10.199.167.160:15201/om/service/om/wotask/reexecute.ilf";
             try {
+                log("sendPost", "调用API: " + url + ", flowId=" + flowId);
                 String response = HttpsUtils.post(url, requestBody, sessionToken);
-                logger.info("POST sent for flow_id={}: Response={}", flowId, response);
+                log("sendPost", "API响应: " + response);
             } catch (Exception e) {
                 logger.error("Failed to send POST for flow_id: {}", flowId, e);
             }
@@ -734,11 +770,37 @@ public class Order {
             try {
                 if (!con.isClosed()) {
                     con.close();
-                    System.out.println("✅ Database connection closed.");
+                    log("closeConnection", "✅ 数据库连接已关闭");
                 }
             } catch (SQLException closeEx) {
                 logger.error("❌ Error closing connection", closeEx);
             }
+        }
+    }
+
+    // ==================== 日志辅助方法 ====================
+
+    /**
+     * 格式化当前时间戳
+     */
+    private static String now() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    /**
+     * 记录操作日志到 catalina.out
+     */
+    private static void log(String method, String message) {
+        System.out.println("[" + now() + "] [Order." + method + "] " + message);
+    }
+
+    /**
+     * 记录 SQL 执行日志到 catalina.out
+     */
+    private static void logSql(String method, String sql, String params) {
+        System.out.println("[" + now() + "] [Order." + method + "] 📝 执行SQL: " + sql);
+        if (params != null && !params.isEmpty()) {
+            System.out.println("[" + now() + "] [Order." + method + "]    参数: " + params);
         }
     }
 }

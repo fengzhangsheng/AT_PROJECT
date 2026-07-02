@@ -28,6 +28,8 @@ import static com.example.Order.closeConnection;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 @WebServlet("/pages/ExecuteServlet")
 public class ExecuteServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
@@ -69,6 +71,8 @@ public class ExecuteServlet extends HttpServlet {
             }
         }
         String jsessionId = request.getParameter("jsessionid");
+        String clientIP = getClientIP(request);
+
         try {
             boolean success = false;
             Connection con = null;
@@ -76,13 +80,17 @@ public class ExecuteServlet extends HttpServlet {
                 throw new IllegalArgumentException("Missing 'action' parameter.");
             }
 
+            // 记录请求入口
+            log(clientIP, action, "▶ 收到请求, flow_id数量=" + (flowIdList.isEmpty() ? 0 : flowIdList.size())
+                    + (flowIdList.size() <= 5 ? ", IDs=" + flowIdList : ", 前5个=" + flowIdList.subList(0, 5) + "..."));
+
             switch (action) {
                 // ✅ 新增：处理设置 JSESSIONID
                 case "setSession":
                     String trimmedId = jsessionId != null ? jsessionId.trim() : null;
                     if (trimmedId != null && !trimmedId.isEmpty()) {
                         Order.sessionToken = trimmedId;
-                        System.out.println("✅ JSESSIONID 已设置: " + Order.sessionToken);
+                        log(clientIP, action, "🔐 JSESSIONID 已设置: " + Order.sessionToken);
                         System.out.println("<div class='success'>");
                         System.out.println("<h3>🔐 JSESSIONID 设置成功: " + escapeHtml(Order.sessionToken) + "</h3>");
                         System.out.println("</div>");
@@ -98,14 +106,18 @@ public class ExecuteServlet extends HttpServlet {
                         con = DriverManager.getConnection("jdbc:zenith:@10.199.167.185:1888", "om", "om#_123OSS");
                         Order.connection = con;
                         // 执行业务逻辑
+                        log(clientIP, action, "连接数据库: jdbc:zenith:@10.199.167.185:1888 (om)");
                         for (String flowIdl : flowIdList) {
                             flowId = flowIdl.trim();
                             if (isValidParam(flowId)) {
                                 try {
+                                    log(clientIP, action, "调用 Order.updateOM, flowId=" + flowId);
                                     Order.updateOM(flowId);
                                     success = true;
+                                    log(clientIP, action, "✅ flowId=" + flowId + " 处理成功");
                                 } catch (Exception e) {
                                     // 记录错误信息但继续处理下一个 flowId
+                                    log(clientIP, action, "❌ flowId=" + flowId + " 处理失败: " + e.getMessage());
                                     logger.error("Failed to process Flow ID: " + flowId, e);
                                 }
                             } else {
@@ -129,14 +141,17 @@ public class ExecuteServlet extends HttpServlet {
                         con = DriverManager.getConnection("jdbc:zenith:@10.199.167.181:1888", "im_rmw", "im_rmw#_123OSS");
                         Order.connection = con;
                         // 执行业务逻辑
+                        log(clientIP, action, "连接数据库: jdbc:zenith:@10.199.167.181:1888 (im_rmw)");
                         for (String flowIdl : flowIdList) {
                             flowId = flowIdl.trim();
                             if (isValidParam(flowId)) {
                                 try {
+                                    log(clientIP, action, "调用 Order.updateIM, flowId=" + flowId);
                                     Order.updateIM(flowId);
                                     success = true;
+                                    log(clientIP, action, "✅ flowId=" + flowId + " 处理成功");
                                 } catch (Exception e) {
-                                    // 记录错误信息但继续处理下一个 flowId
+                                    log(clientIP, action, "❌ flowId=" + flowId + " 处理失败: " + e.getMessage());
                                     logger.error("Failed to process Flow ID: " + flowId, e);
                                 }
                             } else {
@@ -160,14 +175,17 @@ public class ExecuteServlet extends HttpServlet {
                         con = DriverManager.getConnection("jdbc:zenith:@10.199.167.185:1888", "am_ces", "am#_123OSS");
                         Order.connection = con;
                         // 执行业务逻辑
+                        log(clientIP, action, "连接数据库: jdbc:zenith:@10.199.167.185:1888 (am_ces)");
                         for (String flowIdl : flowIdList) {
                             flowId = flowIdl.trim();
                             if (isValidParam(flowId)) {
                                 try {
+                                    log(clientIP, action, "调用 Order.updateAM, flowId=" + flowId);
                                     Order.updateAM(flowId);
                                     success = true;
+                                    log(clientIP, action, "✅ flowId=" + flowId + " 处理成功");
                                 } catch (Exception e) {
-                                    // 记录错误信息但继续处理下一个 flowId
+                                    log(clientIP, action, "❌ flowId=" + flowId + " 处理失败: " + e.getMessage());
                                     logger.error("Failed to process Flow ID: " + flowId, e);
                                 }
                             } else {
@@ -190,14 +208,17 @@ public class ExecuteServlet extends HttpServlet {
                         con = DriverManager.getConnection("jdbc:zenith:@10.199.167.185:1888", "om", "om#_123OSS");
                         Order.connection = con;
                         // 执行业务逻辑
+                        log(clientIP, action, "连接数据库: jdbc:zenith:@10.199.167.185:1888 (om)");
                         for (String flowIdl : flowIdList) {
                             flowId = flowIdl.trim();
                             if (isValidParam(flowId)) {
                                 try {
+                                    log(clientIP, action, "调用 Order.skipwfm, flowId=" + flowId);
                                     Order.skipwfm(flowId);
                                     success = true;
+                                    log(clientIP, action, "✅ flowId=" + flowId + " 处理成功");
                                 } catch (Exception e) {
-                                    // 记录错误信息但继续处理下一个 flowId
+                                    log(clientIP, action, "❌ flowId=" + flowId + " 处理失败: " + e.getMessage());
                                     logger.error("Failed to process Flow ID: " + flowId, e);
                                 }
                             } else {
@@ -227,16 +248,19 @@ public class ExecuteServlet extends HttpServlet {
                     if (!"finish".equals(worksheetAction) && !"cancel".equals(worksheetAction)) {
                         throw new IllegalArgumentException("Worksheet action must be 'finish' or 'cancel'.");
                     }
+                    log(clientIP, action, "参数: operation=" + operation + ", worksheet_action=" + worksheetAction);
                     for (String flowIdk : flowIdList) {
                         String flowIdnw = flowIdk.trim();
                         if (isValidParam(flowIdnw)) {
                             try {
-                                // 传入三个参数：flowId, operation, worksheetAction
+                                log(clientIP, action, "调用 Order.updateAMSN, flowId=" + flowIdnw);
                                 Order.updateAMSN(flowIdnw, operation, worksheetAction);
                                 success = true;
+                                log(clientIP, action, "✅ flowId=" + flowIdnw + " 处理成功");
                                 logger.info("Successfully processed Flow ID: {}, operation: {}, action: {}",
                                         flowId, operation, worksheetAction);
                             } catch (Exception e) {
+                                log(clientIP, action, "❌ flowId=" + flowId + " 处理失败: " + e.getMessage());
                                 logger.error("Failed to process Flow ID: " + flowId, e);
                             }
                         } else {
@@ -264,8 +288,10 @@ public class ExecuteServlet extends HttpServlet {
 
                     logger.info("Received forceCloseSubFlow request. Action Type: {} (Success Mode: {})", statusAction, isSuccessMode);
 
+
                     // 1. 解析并验证输入 ID
                     String[] flowIdList3 = flowIdsText3.split("\\r?\\n|,|;");
+                    log(clientIP, action, "参数: status_action=" + statusAction + ", isSuccessMode=" + isSuccessMode + ", IDs数量=" + flowIdList3.length);
                     List<Long> validInputIds = new ArrayList<>();
 
                     for (String id : flowIdList3) {
@@ -347,15 +373,17 @@ public class ExecuteServlet extends HttpServlet {
                         for (int i = 0; i < validInputIds.size(); i++) {
                             psUpdateCurrent.setLong(i + 1, validInputIds.get(i));
                         }
+                        logSql(clientIP, action, sql1, "IDs=" + validInputIds);
                         int count1 = psUpdateCurrent.executeUpdate();
-                        logger.info("Step 1: " + logStep1Msg, count1);
+                        log(clientIP, action, "Step1-子流程更新: " + logStep1Msg.replace("{}", String.valueOf(count1)));
 
                         psUpdateCmd = conn.prepareStatement(sql2);
                         for (int i = 0; i < validInputIds.size(); i++) {
                             psUpdateCmd.setLong(i + 1, validInputIds.get(i));
                         }
+                        logSql(clientIP, action, sql2, "SUB_ORDER_IDs=" + validInputIds);
                         int count2 = psUpdateCmd.executeUpdate();
-                        logger.info("Step 1 (Cmd): Updated {} associated commands.", count2);
+                        log(clientIP, action, "Step1-命令实例更新: 影响 " + count2 + " 条");
 
                         // ================= 第二步：按 FLOW_ID 分组，并计算每个组的 Max Cut Seq =================
                         // 注意：如果是“强制成功”，通常意味着我们认为这些节点已经成功跑完了，
@@ -378,6 +406,7 @@ public class ExecuteServlet extends HttpServlet {
 
                         Map<Long, FlowRecoveryContext> recoveryPlan = new HashMap<>();
 
+                        log(clientIP, action, "Step2-查询子流程信息以构建恢复计划...");
                         String sqlGetInfo = "SELECT ID, FLOW_ID, FLOW_SEQ FROM am_ces.t_am_sub_flow_info WHERE ID = ?";
                         try (PreparedStatement psMap = conn.prepareStatement(sqlGetInfo)) {
                             for (Long id : validInputIds) {
@@ -422,6 +451,7 @@ public class ExecuteServlet extends HttpServlet {
                                 "WHERE FLOW_ID = ?";
 
                         // ================= 第三步：遍历每个主流程执行链式激活 =================
+                        log(clientIP, action, "Step3-开始链式恢复, 共 " + recoveryPlan.size() + " 个主流程");
                         for (Map.Entry<Long, FlowRecoveryContext> entry : recoveryPlan.entrySet()) {
                             long currentFlowId = entry.getKey();
                             FlowRecoveryContext ctx = entry.getValue();
@@ -453,6 +483,7 @@ public class ExecuteServlet extends HttpServlet {
 
                                             try (PreparedStatement psAct = conn.prepareStatement(sqlActivate)) {
                                                 psAct.setLong(1, waitingTaskId);
+                                                logSql(clientIP, action, sqlActivate, "ID=" + waitingTaskId);
                                                 int updated = psAct.executeUpdate();
                                                 if (updated > 0) {
                                                     logger.info("Activated next task: ID={}, SEQ={}. Waiting for completion...", waitingTaskId, nextSeq);
@@ -468,8 +499,9 @@ public class ExecuteServlet extends HttpServlet {
                                             logger.info("End of chain reached for Flow {}. No tasks found after SEQ {}.", currentFlowId, currentSeq);
                                             try (PreparedStatement psMain = conn.prepareStatement(sqlUpdateMainFlow)) {
                                                 psMain.setLong(1, currentFlowId);
+                                                logSql(clientIP, action, sqlUpdateMainFlow, "FLOW_ID=" + currentFlowId);
                                                 psMain.executeUpdate();
-                                                logger.info("Main Flow {} updated to COMPLETED.", currentFlowId);
+                                                log(clientIP, action, "主流程 " + currentFlowId + " 已更新为 COMPLETED");
                                             }
                                             break;
                                         }
@@ -566,7 +598,9 @@ public class ExecuteServlet extends HttpServlet {
                         conn2.setAutoCommit(false);
 
                         // 1️⃣ 清空中间表
+                        log(clientIP, action, "连接数据库: jdbc:zenith:@10.199.167.183:1888 (AT_SDM), ServNo数量=" + validServNos.size());
                         Statement st = conn2.createStatement();
+                        logSql(clientIP, action, "TRUNCATE TABLE AT_SDM.mid_repair_region", "");
                         st.executeUpdate("TRUNCATE TABLE AT_SDM.mid_repair_region");
 
                         // 2️⃣ 构造 IN (?, ?, ?)
@@ -591,7 +625,9 @@ public class ExecuteServlet extends HttpServlet {
                             psInsert.setString(i + 1, validServNos.get(i));
                         }
 
+                        logSql(clientIP, action, insertSql, "servNos=" + validServNos);
                         int inserted = psInsert.executeUpdate();
+                        log(clientIP, action, "插入中间表: " + inserted + " 行");
 
                         // 3️⃣ MERGE
                         String mergeSql =
@@ -604,7 +640,9 @@ public class ExecuteServlet extends HttpServlet {
                                         "   T.column_44 = S.CMP";
 
                         psMerge = conn2.prepareStatement(mergeSql);
+                        logSql(clientIP, action, mergeSql, "");
                         int merged = psMerge.executeUpdate();
+                        log(clientIP, action, "MERGE执行: " + merged + " 行");
 
                         conn2.commit();
 
@@ -649,10 +687,13 @@ public class ExecuteServlet extends HttpServlet {
                         newVal = newVal.trim();
 
                         logger.info("Received updateExecuteCmd request: flow_id={}, replacing '{}' with '{}'", flowId, oldVal, newVal);
+                        log(clientIP, action, "参数: flowId=" + flowId + ", oldVal=" + oldVal + ", newVal=" + newVal);
 
                         // 执行更新
                         try {
+                            log(clientIP, action, "调用 Order.updatesn, flowId=" + flowId);
                             Order.updatesn(flowId, oldVal, newVal);
+                            log(clientIP, action, "✅ flowId=" + flowId + " 更新成功");
                             success = true;
                         } catch (Exception e) {
                             logger.error("Failed to update execute_cmd for flow_id={}: '{}' → '{}'", flowId, oldVal, newVal, e);
@@ -700,11 +741,13 @@ public class ExecuteServlet extends HttpServlet {
                             }
 
                             try {
-                                // ✅ 调用统一方法完成 AM 工单（默认视为成功）
+                                log(clientIP, action, "调用 Order.finishamorder, flowId=" + flowIdl);
                                 Order.finishamorder(flowIdl);
                                 success = true;
+                                log(clientIP, action, "✅ flowId=" + flowIdl + " AM工单完成");
                                 logger.info("✅ AM work order completed successfully: {}", flowIdl);
                             } catch (Exception e) {
+                                log(clientIP, action, "❌ flowId=" + flowIdl + " 失败: " + e.getMessage());
                                 logger.error("❌ Failed to complete AM order for flow_id: {}", flowIdl, e);
                             }
                         }
@@ -794,7 +837,9 @@ public class ExecuteServlet extends HttpServlet {
                                 ps.setString(index++, flowIdnew);
                             }
 
+                            logSql(clientIP, action, sql, "orderType=" + orderType + ", targetStatus=" + targetStatus + ", flowIds=" + validFlowIds);
                             int rowsAffected = ps.executeUpdate();
+                            log(clientIP, action, "批量更新结果: " + rowsAffected + " 行被影响");
 
                             logger.info(
                                     "✅ Batch update completed for {} orders. Target status: {}, affected rows: {}",
@@ -897,7 +942,7 @@ public class ExecuteServlet extends HttpServlet {
                     }
 
                     executePasswordUpdate(request, jdbcUrl, dbUser, dbPassword,
-                            tableName, userStatus, whereColumn, statusColumn, systemType);
+                            tableName, userStatus, whereColumn, statusColumn, systemType, clientIP, action);
 
                     success = true;
                     break;
@@ -931,10 +976,13 @@ public class ExecuteServlet extends HttpServlet {
                             }
 
                             try {
-                                Order.closeWFMComplaintOrder(con, flowIdwfc); // ✅ 封装的核心方法
+                                log(clientIP, action, "调用 Order.closeWFMComplaintOrder, flowId=" + flowIdwfc);
+                                Order.closeWFMComplaintOrder(con, flowIdwfc);
                                 processedCount++;
+                                log(clientIP, action, "✅ flowId=" + flowIdwfc + " WFM工单关闭成功");
                                 logger.info("✅ Closed WFM complaint order: {}", flowIdwfc);
                             } catch (Exception e) {
+                                log(clientIP, action, "❌ flowId=" + flowIdwfc + " 失败: " + e.getMessage());
                                 logger.error("❌ Failed to close WFM order for flow_id: {}", flowIdwfc, e);
                                 con.rollback(); // 回滚整个批次（可选：也可只跳过当前）
                                 throw new RuntimeException("Failed at flow_id: " + flowIdwfc, e);
@@ -999,8 +1047,10 @@ public class ExecuteServlet extends HttpServlet {
                         String queryRegionSql =
                                 "SELECT CODE FROM PUB_REGION WHERE NAME = ?";
 
+                        log(clientIP, action, "连接数据库: algeria_wfm, 查询区域CODE, newRegion=" + newRegion + ", oldRegion=" + oldRegion);
                         try (PreparedStatement ps = con.prepareStatement(queryRegionSql)) {
                             ps.setString(1, newRegion.trim());
+                            logSql(clientIP, action, queryRegionSql, "NAME=" + newRegion);
 
                             try (ResultSet rs = ps.executeQuery()) {
                                 if (rs.next()) {
@@ -1008,6 +1058,7 @@ public class ExecuteServlet extends HttpServlet {
                                 }
                             }
                         }
+                        log(clientIP, action, "查询到 REGION CODE: " + regionId);
 
                         // 未找到区域
                         if (regionId == null || regionId.trim().isEmpty()) {
@@ -1050,7 +1101,9 @@ public class ExecuteServlet extends HttpServlet {
                             // 原 REGION
                             ps.setString(index, oldRegion.trim());
 
+                            logSql(clientIP, action, sql, "newRegion=" + newRegion + ", regionId=" + regionId + ", oldRegion=" + oldRegion + ", flowIds=" + flowIdList);
                             int updatedRows = ps.executeUpdate();
+                            log(clientIP, action, "更新结果: " + updatedRows + " 行");
 
                             logger.info(
                                     "Updated {} rows. Region: '{}' -> '{}', RegionId: '{}', Flow IDs: {}",
@@ -1106,8 +1159,10 @@ public class ExecuteServlet extends HttpServlet {
                         String regionSql =
                                 "SELECT CODE FROM algeria_WFM.PUB_REGION WHERE NAME = ?";
 
+                        log(clientIP, action, "连接数据库: algeria_wfm, 查询区域CODE, newRegion=" + newRegion);
                         try (PreparedStatement ps = con.prepareStatement(regionSql)) {
                             ps.setString(1, newRegion.trim());
+                            logSql(clientIP, action, regionSql, "NAME=" + newRegion);
 
                             try (ResultSet rs = ps.executeQuery()) {
                                 if (rs.next()) {
@@ -1115,6 +1170,7 @@ public class ExecuteServlet extends HttpServlet {
                                 }
                             }
                         }
+                        log(clientIP, action, "查询到 REGION CODE: " + regionId);
 
                         // 校验是否存在
                         if (regionId == null || regionId.trim().isEmpty()) {
@@ -1157,7 +1213,9 @@ public class ExecuteServlet extends HttpServlet {
                                 ps.setString(index++, flowId6);
                             }
 
+                            logSql(clientIP, action, sql, "newRegion=" + newRegion + ", regionId=" + regionId + ", flowIds=" + flowIdList);
                             int updatedRows = ps.executeUpdate();
+                            log(clientIP, action, "更新投诉记录: " + updatedRows + " 行");
 
                             logger.info(
                                     "Updated {} complaint records. Region='{}', RegionId='{}', Flow IDs={}",
@@ -1223,7 +1281,10 @@ public class ExecuteServlet extends HttpServlet {
                         }
 
                         // Step 1: 清空中间表
-                        try (PreparedStatement deleteStmt = con.prepareStatement("DELETE FROM IM_RMW.ONT_CHANGE_TEMP")) {
+                        log(clientIP, action, "连接数据库: im_rmw, 数据行数=" + pairs.size());
+                        String deleteTempSql = "DELETE FROM IM_RMW.ONT_CHANGE_TEMP";
+                        try (PreparedStatement deleteStmt = con.prepareStatement(deleteTempSql)) {
+                            logSql(clientIP, action, deleteTempSql, "");
                             deleteStmt.executeUpdate();
                         }
 
@@ -1235,6 +1296,7 @@ public class ExecuteServlet extends HttpServlet {
                                 insertStmt.setString(2, pair[1]); // NEW_SERIAL_NUM
                                 insertStmt.addBatch();
                             }
+                            logSql(clientIP, action, insertSql, "批量插入 " + pairs.size() + " 条记录");
                             insertStmt.executeBatch();
                         }
 
@@ -1370,10 +1432,13 @@ public class ExecuteServlet extends HttpServlet {
                                 "END;";
 
                         try (CallableStatement cs = con.prepareCall(plsql)) {
+                            log(clientIP, action, "执行 PL/SQL 匿名块 (ONT SN 变更), 长度=" + plsql.length() + " 字符");
                             cs.execute();
+                            log(clientIP, action, "PL/SQL 执行完成");
                         }
 
                         con.commit();
+                        log(clientIP, action, "事务提交成功, 共处理 " + pairs.size() + " 条 ONT SN 变更");
                         response.getWriter().println("✅ Successfully processed " + pairs.size() + " ONT SN changes.");
 
                     } catch (Exception e) {
@@ -1443,9 +1508,10 @@ public class ExecuteServlet extends HttpServlet {
                         }
 
                         // 3️⃣ 清空临时表
-                        try (PreparedStatement ps = con.prepareStatement(
-                                "DELETE FROM IM_RMW.REPID_CHANGE_TEMP"
-                        )) {
+                        log(clientIP, action, "连接数据库: im_rmw, 数据行数=" + pairs.size());
+                        String deleteRepidSql = "DELETE FROM IM_RMW.REPID_CHANGE_TEMP";
+                        try (PreparedStatement ps = con.prepareStatement(deleteRepidSql)) {
+                            logSql(clientIP, action, deleteRepidSql, "");
                             ps.executeUpdate();
                         }
 
@@ -1457,6 +1523,7 @@ public class ExecuteServlet extends HttpServlet {
                                 ps.setString(2, p[1]);
                                 ps.addBatch();
                             }
+                            logSql(clientIP, action, insertSql, "批量插入 " + pairs.size() + " 条记录");
                             ps.executeBatch();
                         }
 
@@ -1478,11 +1545,13 @@ public class ExecuteServlet extends HttpServlet {
                                         "END;";
 
                         try (CallableStatement cs = con.prepareCall(plsql)) {
+                            log(clientIP, action, "执行 PL/SQL 匿名块 (REPID 批量更新)");
                             cs.execute();
+                            log(clientIP, action, "PL/SQL 执行完成");
                         }
 
                         con.commit();
-
+                        log(clientIP, action, "事务提交成功, 共更新 " + pairs.size() + " 条记录");
                         response.getWriter().println("✅ Successfully updated " + pairs.size() + " records.");
 
                     } catch (Exception e) {
@@ -1539,6 +1608,7 @@ public class ExecuteServlet extends HttpServlet {
                         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
                         String flowIdsForSql = String.join(",", validFlowIds);
+                        log(clientIP, action, "导出类型=" + exportType + ", Flow IDs数量=" + validFlowIds.size());
                         SQLToExcel.exportSdmFastExcel(exportType, flowIdsForSql, buffer);
 
                         byte[] excelBytes = buffer.toByteArray();
@@ -1583,6 +1653,7 @@ public class ExecuteServlet extends HttpServlet {
                     }
                 }
                 default:
+                    log(clientIP, action, "❌ 未知操作: " + action);
                     throw new IllegalArgumentException("Unknown action: " + action);
             }
 
@@ -1599,6 +1670,7 @@ public class ExecuteServlet extends HttpServlet {
 
             // ✅ 只有非 setSession 且成功时才显示通用成功消息
             if (!"setSession".equals(action) && success) {
+                log(clientIP, action, "🏁 操作完成, 返回成功页面");
                 out.println("<div class='success'>");
                 out.println("<h3>✅ Action '" + escapeHtml(action) + "' executed successfully!</h3>");
                 out.println("</div>");
@@ -1612,6 +1684,7 @@ public class ExecuteServlet extends HttpServlet {
         } catch (Exception e) {
             // 错误时才输出 HTML 错误页
             String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            log(clientIP, action, "❌ 执行失败: " + errorMsg);
             PrintWriter out = response.getWriter();
             response.setContentType("text/html;charset=UTF-8");
             out.println("<!DOCTYPE html>");
@@ -1685,7 +1758,9 @@ public class ExecuteServlet extends HttpServlet {
             String userStatus,
             String whereColumn,
             String statusColumn,
-            String systemType) {
+            String systemType,
+            String clientIP,
+            String action) {
 
         Connection con = null;
 
@@ -1693,6 +1768,7 @@ public class ExecuteServlet extends HttpServlet {
 
             Class.forName("com.huawei.gauss.jdbc.ZenithDriver");
             con = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword);
+            log(clientIP, action, "连接数据库: " + jdbcUrl + " (" + dbUser + "), 系统=" + systemType);
 
             String userIdsParam = request.getParameter("user_ids");
             String rawPassword = request.getParameter("password");
@@ -1733,6 +1809,8 @@ public class ExecuteServlet extends HttpServlet {
                 throw new IllegalArgumentException("No valid user IDs provided.");
             }
 
+            log(clientIP, action, "用户数量=" + validUserIds.size() + ", systemType=" + systemType + ", tableName=" + tableName);
+
             String inClause = String.join(",", Collections.nCopies(validUserIds.size(), "?"));
 
             String sql = "UPDATE " + tableName +
@@ -1748,7 +1826,9 @@ public class ExecuteServlet extends HttpServlet {
                     pstmt.setString(i + 3, validUserIds.get(i));
                 }
 
+                logSql(clientIP, action, sql, "passwordHash=***" + ", userStatus=" + userStatus + ", userIds=" + validUserIds);
                 int rowsAffected = pstmt.executeUpdate();
+                log(clientIP, action, "密码更新结果: " + rowsAffected + " 行");
 
                 logger.info("Updated {} users in {}", rowsAffected, tableName);
 
@@ -1759,6 +1839,7 @@ public class ExecuteServlet extends HttpServlet {
 
         } catch (Exception e) {
 
+            log(clientIP, action, "❌ 密码更新失败: " + e.getMessage());
             logger.error("Password update failed", e);
             request.setAttribute("message", "Error: " + e.getMessage());
 
@@ -1784,6 +1865,56 @@ public class ExecuteServlet extends HttpServlet {
         out.println("<a href='javascript:history.back()'>&larr; Go Back</a>");
         out.println("</body></html>");
     }
+    // ==================== 日志辅助方法 ====================
+
+    /**
+     * 获取客户端真实 IP（考虑代理/负载均衡）
+     */
+    private String getClientIP(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        // 多级代理时取第一个 IP
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip;
+    }
+
+    /**
+     * 格式化当前时间戳
+     */
+    private String now() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    /**
+     * 记录操作日志到 catalina.out
+     */
+    private void log(String ip, String action, String message) {
+        System.out.println("[" + now() + "] [IP: " + ip + "] [操作: " + action + "] " + message);
+    }
+
+    /**
+     * 记录 SQL 执行日志
+     */
+    private void logSql(String ip, String action, String sql, String params) {
+        System.out.println("[" + now() + "] [IP: " + ip + "] [操作: " + action + "] 📝 执行SQL: " + sql);
+        if (params != null && !params.isEmpty()) {
+            System.out.println("[" + now() + "] [IP: " + ip + "] [操作: " + action + "]    参数: " + params);
+        }
+    }
+
     private String escapeHtml(String input) {
         if (input == null) return "";
         return input
